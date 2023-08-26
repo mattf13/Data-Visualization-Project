@@ -1,0 +1,8 @@
+"0","spi_premierleague<- spi_matches_with_results%>%"
+"0","  filter(league_id == 2411, season<=2021, team1 == ""Liverpool"" | team2 == ""Liverpool"")%>%"
+"0","  mutate(location = ifelse(team1 == ""Liverpool"", ""home"", ""away"")) %>%"
+"0","  mutate(liverpool_points = ifelse(location == ""home"", points_home, points_away)) %>%"
+"0","  group_by(season) %>%"
+"0","  mutate(match_week = row_number())"
+"0",""
+"0","spi_premierleague"

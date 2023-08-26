@@ -1,0 +1,8 @@
+"0","spi_matches_with_results<-spi_matches_cleaned%>%"
+"0","mutate(points_home =  case_when(score1>score2 ~ 3,"
+"0","                            score1<score2 ~ 0,"
+"0","                            TRUE ~ 1)) %>% "
+"0","mutate(points_away =  case_when(score1>score2 ~ 0,"
+"0","                            score1<score2 ~ 3,"
+"0","                            TRUE ~ 1))"
+"0","spi_matches_with_results"

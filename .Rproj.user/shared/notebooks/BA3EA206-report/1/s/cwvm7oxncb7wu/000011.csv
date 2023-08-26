@@ -1,0 +1,3 @@
+"0","spi_matches_without_na <- spi_matches %>%"
+"0","  drop_na()"
+"0","spi_matches_without_na"

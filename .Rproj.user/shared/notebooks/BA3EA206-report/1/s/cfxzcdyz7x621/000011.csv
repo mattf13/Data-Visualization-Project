@@ -1,0 +1,14 @@
+"0","#load data set"
+"0","spi_matches_url <- ""https://projects.fivethirtyeight.com/soccer-api/club/spi_matches.csv"""
+"0",""
+"0","spi_matches <- read_csv(spi_matches_url, na=c("""", "" ""))"
+"2","[1mRows: [22m[34m65977[39m [1mColumns: [22m[34m23[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m───────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m   (3): league, team1, team2
+[32mdbl[39m  (19): season, league_id, spi1, spi2, prob1, prob2, probtie, proj_score1, proj_scor...
+[34mdate[39m  (1): date"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","spi_matches"

@@ -1,0 +1,629 @@
+---
+title: "Soccer Power Index analysis"
+subtitle: "Data Vizualization Project 2022/2023"
+author: "Matteo Fiore"
+output:
+  html_document:
+    code_folding: hide
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Data Vizualization Project 2022/2023 - Matteo Fiore
+
+
+## Introduction
+
+
+The aim of the project is to visualize the correlation between SPI and the results of football matches played during the last 5 years.
+
+The Soccer Power Index (SPI) is a metric used to rank the level of competitiveness of a Soccer Team. The index has been designed by [ESPN](https://www.espn.com/world-cup/story/_/id/4447078/ce/us/guide-espn-spi-ratings) and it tries to be as objective as possible, by trying to depict which team is the most likely to have success.
+
+In particular I will focus on two teams, one from the Serie A and one from the Premier League. To understand the differences and difficulties this indexhad in different seasons, for different teams in different countries.
+
+```{r}
+libraries <- c(
+  "tidyverse",
+  "gapminder",
+  "gridExtra",
+  "tidyr",
+  "tibble"
+)
+load_libs <- function(libraries) {
+  # Use a snapshot of the package repository, for reproducibility purposes
+  MRAN <- "https://cran.microsoft.com/snapshot/2022-09-15/"
+  req <- unlist(lapply(libraries, require, character.only = TRUE))
+  need <- libraries[req == FALSE]
+  if (length(need) > 0) {
+    install.packages(need, repos=MRAN)
+    lapply(need, require, character.only = TRUE)
+  }
+}
+load_libs(libraries)
+```
+
+## Data retrieval
+First we download the csv file that contains all the matches played in the major leagues around the world the past five years. The data comes from this [source](https://projects.fivethirtyeight.com/soccer-api/club/spi_matches.csv).
+
+```{r}
+#load data set
+spi_matches_url <- "https://projects.fivethirtyeight.com/soccer-api/club/spi_matches.csv"
+
+spi_matches <- read_csv(spi_matches_url, na=c("", " "))
+spi_matches
+```
+
+### Data exploration
+
+The dataframe contains the following columns:
+
+```{r}
+names(spi_matches)
+```
+
+It has the following dimension:
+
+```{r}
+dim(spi_matches)
+```
+
+And it contains a lot of NA values:
+```{r}
+sum(is.na(spi_matches))
+```
+
+As we can see, the dataframe has a substantial size. Therefore, it will be essential to properly analyse its structure and add/remove the information that are not needed for this research project.
+
+## Data preparation
+
+In this step, I am going to prepare the data before proceeding with the visualization part. 
+
+I will start by removing the NA values:
+```{r}
+spi_matches_without_na <- spi_matches %>%
+  drop_na()
+spi_matches_without_na
+
+```
+
+I am going to remove some columns that are not necessary for this research project. Since we are analyzing past matches, it is not necessary for us to have the columns related to the probabilities, importance, projected and adjusted score or xgs; as we have already the SPI that includes this information. This information will be removed because they are already captured in other columns and for this reason, I want to avoid duplicate information. 
+
+```{r}
+columns_to_remove = c("prob1","prob2","probtie","proj_score1", "proj_score2", "importance1", "importance2", "adj_score1","adj_score2","xg1","xg2","nsxg1","nsxg2")
+spi_matches_cleaned <- subset(spi_matches_without_na, select = !(names(spi_matches_without_na) %in% columns_to_remove))
+spi_matches_cleaned
+```
+
+After removing the unwanted columns, we need to add the columns representing the outcome of the matches. The outcome can result in a team obtaining 3 points if it wins, 1 if it draws and 0 if the team loses. The added results will be added as two new additional columns, these columns will indicate the obtaining points of the home team and the away team.
+
+```{r}
+spi_matches_with_results<-spi_matches_cleaned%>%
+mutate(points_home =  case_when(score1>score2 ~ 3,
+                            score1<score2 ~ 0,
+                            TRUE ~ 1)) %>% 
+mutate(points_away =  case_when(score1>score2 ~ 0,
+                            score1<score2 ~ 3,
+                            TRUE ~ 1))
+spi_matches_with_results
+
+```
+
+## Data Vizualization
+
+Since we want to analyse one team from Serie A and Premier League, we want to compute their average SPI across the years. The teams we are going to consider are AS Roma(Serie A, Italy) and Liverpool(Premier League, UK).
+
+### AS Roma analysis
+
+Firstly,I will select all the matches played in the Italy Serie A by Roma until the 2021 season.
+Therefore, it is essential to filter all the matches Roma and add other information to the dataframe such as if Roma played at home or away, the points made by Roma in each match, the sum of the points made each match that will be used to analyse the performances over the years and the match number of that season.
+
+```{r}
+#all matches with a column that specify if Roma played at home or away
+serie_a_matches_Roma <- spi_matches_with_results%>%
+  filter(league_id == 1854, season<=2021, team1 == "AS Roma" | team2 == "AS Roma")%>%
+  mutate(location = ifelse(team1 == "AS Roma", "home", "away")) %>%
+  mutate(roma_points = ifelse(location == "home", points_home, points_away)) %>%
+  group_by(season) %>%
+  mutate(match_week = row_number())
+
+serie_a_matches_Roma
+```
+
+After preparing the dataframe, we analyse the performances of Roma throughout the seasons.
+First of all we want to see the trend of the average SPI index Roma had from the 2016 season until the 2021 season.
+
+```{r}
+avg_spi_roma <- serie_a_matches_Roma %>%
+  filter(team1 == 'AS Roma' | team2 == 'AS Roma')%>%
+  group_by(season)%>%
+  summarize(average_spi = mean(c(spi1,spi2)))%>%
+  ggplot(mapping = aes(x = season)) +
+  geom_line(mapping =aes(y = average_spi, color = "Average SPI")) +
+  geom_point(mapping =aes(y = average_spi, color = "Average SPI"), size=3) +
+  guides(fill = guide_legend(title = "Metric", reverse = TRUE))+
+  labs(x = "Season", y = "SPI Value", title = "Average SPI of AS Roma over the Seasons", subtitle = "Trends in Roma's SPI over the seasons",caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight") +
+  guides(color = guide_legend(title = "Metric", reverse = TRUE))+ 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) 
+
+avg_spi_roma
+```
+
+As shown in the graph, we can see that AS Roma had an SPI value ranging from 69 to 71 from season 2016 until 2020 season. Nevertheless, there has been a major decreasing of the average value of the SPI in 2021.
+
+#### What happened in 2021?
+
+We start by analysing the trend of the points made by Roma during the 2021/2022 season.
+
+```{r}
+roma_points_2021_density <- serie_a_matches_Roma %>%
+  filter(season == 2021, (team1 == "AS Roma" | team2 == "AS Roma")) %>%
+  group_by(match_week) %>%
+  summarize(points = sum(roma_points)) %>%
+  ggplot( aes(x = points)) + 
+  geom_density(color = "black", fill ="#F0BC00" ) +
+  scale_x_continuous(breaks = c(0, 1, 3), limits = c(0, 3), name = "Points") + 
+  labs(title = "Density Plot of Points Made by AS Roma in the 2021/2022 Season",
+       x = "Points", y = "Density", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight")+
+  theme_classic() +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    axis.text = element_text(color = "#8E1F2F", size = 12, family = "sans"),
+    plot.title =  element_text(color = "#8E1F2F", size = 14, family = "sans", face = "bold"),
+    axis.title =  element_text(color = "#8E1F2F", size = 14, family = "sans", face = "bold"),
+    legend.key.height = unit(1, "cm"),
+    legend.key.width = unit(1, "cm"),
+    legend.title = element_text(size = 14, family = "sans", face = "bold"),
+    legend.text = element_text(size = 12, family = "sans")
+    )
+roma_points_2021_density
+```
+
+Overall, the distribution of points seems pretty balanced. Therefore, we can have a deeper look to the distribution of points gained by AS Roma.
+
+```{r}
+roma_distribution_home <- serie_a_matches_Roma %>%
+  filter(season == 2021, team1 == "AS Roma") %>%
+  mutate(roma_points = factor(roma_points , levels = c("0", "1", "3"))) %>%
+ggplot(aes(x = roma_points, y = spi1, fill = roma_points)) +
+  geom_violin(scale = "area", draw_quantiles = c(0.25, 0.5, 0.75), width = 0.8) +
+  scale_fill_manual(values=c("#4ADDE0","#30937F","#152D1A")) +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  guides(fill = guide_legend(reverse = TRUE, title = "Points"))+
+  labs(title = "Distribution of Roma SPI", subtitle = "Points gained by Roma and Roma SPI distribution as the home team in the 2021 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Roma's match result", y = "Roma SPI") +
+    theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) 
+
+
+
+roma_distribution_home
+```
+
+```{r}
+roma_distribution_away <- serie_a_matches_Roma %>%
+  filter(season == 2021, team2 == "AS Roma") %>%
+  mutate(roma_points = factor(roma_points , levels = c("0", "1", "3"))) %>%
+ggplot(aes(x = roma_points, y = spi2, fill = roma_points)) +
+  geom_violin(scale = "area", draw_quantiles = c(0.25, 0.5, 0.75), width = 0.8) +
+  scale_fill_manual(values=c("#4ADDE0","#30937F","#152D1A")) +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  guides(fill = guide_legend(reverse = TRUE, title ="Points"))+
+  labs(title = "Distribution of Roma SPI in 2021/2022", subtitle = "Points gained by Roma and Roma SPI distribution as the home team in the 2021 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Roma's match result", y = "Roma SPI") +
+    theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        )
+
+
+
+roma_distribution_away
+```
+
+
+We are interested to see Roma performances and the changes of its SPI value throughout the season. Therefore, we check how it performed while playing as the home team and as the away team. By doing this analysis, we can have a more thorough overview of the validity of the SPI of Roma, compared with Roma's performances (i.e. points gained).
+
+```{r}
+#home
+Roma_2021_home <- serie_a_matches_Roma %>%
+  filter(season==2021, team1 =='AS Roma') %>%
+  mutate(points_home = factor(points_home, levels = c("3", "1", "0"))) %>%
+  ggplot(position = "dodge")+
+  geom_col(mapping = aes(x = date, y = spi1, fill = points_home))+
+  scale_x_date(date_breaks = "4 week", date_labels = "%b %d", name = "Date") +
+  scale_fill_manual(values=c("#152D1A","#30937F","#4ADDE0") )+
+  labs(title = "Roma Home Performances in 2021/2022", subtitle = "Points gained by Roma and Roma SPI trend as the home team in the 2021 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Date", y = "Roma SPI") + 
+  coord_cartesian(ylim = c(60,80)) +
+  scale_y_continuous(breaks = seq(60, 80, 10)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        plot.subtitle = element_text(size = 12, family = "sans"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold")) +
+  guides(fill = guide_legend(title = "Points"))
+
+#away
+Roma_2021_away <- serie_a_matches_Roma %>%
+  filter(season == 2021, team2 =='AS Roma') %>%
+  mutate(points_away = factor(points_away, levels = c("3", "1", "0"))) %>%
+  ggplot(mapping = aes(x = date, y = spi2, fill = points_away)) + 
+  geom_col(position = "dodge") + 
+  scale_x_date(date_breaks = "4 week", date_labels = "%b %d", name = "Date") +
+  scale_fill_manual(values=c("#152D1A","#30937F","#4ADDE0") )+
+  labs(title = "Roma Away Performances", subtitle = "Points gained by Roma and Roma SPI trend as the away team in the 2021 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Date", y = "Roma SPI") + 
+  coord_cartesian(ylim = c(60,80)) +
+  scale_y_continuous(breaks = seq(60, 80, 10)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        plot.subtitle = element_text(size = 12, family = "sans"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold")
+        ) +
+  guides(fill = guide_legend(title = "Points"))
+
+#comparison
+grid.arrange(Roma_2021_home, Roma_2021_away, nrow = 2)
+
+```
+
+By comparing the two plots, we can see that AS Roma had bad performances  while playing as the away team, while the performances as the home team where satisfactory, just 3 losses in 19 matches.
+
+To have an understanding of how Roma permormed, we need to understand also the SPI value of the opponent, to have a better view of the accuracy of the index.
+```{r}
+points_roma_ho = serie_a_matches_Roma %>%
+  filter(season==2021, team1 =='AS Roma') %>%
+  mutate(roma_points = factor(roma_points , levels = c("0", "1", "3"))) %>%
+ggplot(aes(x = factor(roma_points), y = spi2, fill=roma_points)) +
+  scale_fill_manual(values=c("#4ADDE0","#30937F","#152D1A"))+
+  geom_boxplot() +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) +
+  guides(fill = guide_legend(reverse = TRUE, title = "Points"))+
+  labs(title = "Roma Performances (Home team)", subtitle = "Roma's match outcome compared to Opposition SPI and points gained by Roma", x="Roma's match outcome",y="Opposition SPI", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight")
+
+
+points_roma_ho
+```
+
+Roma performed decently as the home team. They lost games against team with an high SPI value, and draw some matches against team with team with low SPI. Let's check the away performances of Roma.
+
+```{r}
+points_roma_aw = serie_a_matches_Roma %>%
+  filter(season==2021, team2 =='AS Roma') %>%
+  mutate(roma_points = factor(roma_points , levels = c("0", "1", "3"))) %>%
+  ggplot(aes(x = factor(roma_points), y = spi1, fill=roma_points)) +
+  scale_fill_manual(values=c("#4ADDE0","#30937F","#152D1A"))+
+  geom_boxplot() +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans")
+        ) +
+  guides(fill = guide_legend(reverse = TRUE, title ="Points"))+
+  labs(title = "Roma Performances (Away team)", subtitle = "Roma's match outcome compared to Opposition SPI and points gained by Roma", x="Roma's match outcome",y="Opposition SPI", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight")
+
+points_roma_aw
+```
+
+
+Overall, Roma struggled to gain point against opponent with an high SPI.
+
+Now, we will compare the results of Roma with the SPI of the opposition team, to check in which matches Roma struggled the most.
+
+```{r}
+points_roma_h = serie_a_matches_Roma %>%
+  filter(season==2021, team1 =='AS Roma') %>%
+  mutate(roma_points = factor(roma_points , levels = c("3", "1", "0"))) %>%
+  ggplot(aes(x = spi1, y = spi2, color = roma_points)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values=c("#152D1A","#30937F","#4ADDE0"))+
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans")
+        ) +
+  guides(color = guide_legend(title = "Points")) +
+  labs(title = "Roma Performances (Home team)", subtitle = "Roma's match outcome and comparison of Roma and Away team SPI", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x= "Roma SPI", y ="Opposition SPI")
+
+
+points_roma_h
+```
+
+We can see that Roma failed to win matches against opponents with an high SPI value, thus indicating that Roma struggled to win against strong team. We can also analyse, Roma drew some matches against team against opponents that had a very low SPI. Overall, they won most matches when their SPI was higher than the one of their opponents.
+
+What happened when Roma was the away team?
+
+```{r}
+points_roma_a = serie_a_matches_Roma %>%
+  filter(season==2021, team2 =='AS Roma') %>%
+  mutate(roma_points = factor(roma_points , levels = c("3", "1", "0"))) %>%
+  ggplot(aes(x = spi2, y = spi1, color = roma_points)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values=c("#152D1A","#30937F","#4ADDE0"))+
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans")
+        ) +
+  guides(color = guide_legend(title = "Points")) +
+  labs(title = "Roma Performances (Away team)", subtitle = "Roma's match outcome and comparison of Roma and Home team SPI", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Roma SPI", y="Opposition SPI")
+
+
+points_roma_a
+```
+
+From this plot, we can confirm that Roma had very bad performances while playing away from its own stadium. In particular, they struggled a lot against opponents with an high SPI value.
+The majority of the points gained by Roma were done against teams with a lower SPI value.
+
+To summarize, Roma was able to gain more points while playing as the home team. Nevertheless, the struggling they had throughout the season against opponents with an higher SPI values is one of the main cause of their bad performance in the 2021 season.
+The SPI, however, failed why Roma lost numerous points against teams with a much lower SPI.
+
+### Liverpool analysis
+
+Now, we want to analyse another team from another league, to see if the SPI has been accurate or not.
+
+```{r}
+spi_premierleague<- spi_matches_with_results%>%
+  filter(league_id == 2411, season<=2021, team1 == "Liverpool" | team2 == "Liverpool")%>%
+  mutate(location = ifelse(team1 == "Liverpool", "home", "away")) %>%
+  mutate(liverpool_points = ifelse(location == "home", points_home, points_away)) %>%
+  group_by(season) %>%
+  mutate(match_week = row_number())
+
+spi_premierleague
+```
+
+After filtering the data to match our interest, we start by plotting the performances of Liverpool throughout the seasons. First of all we want to see the trend of the average SPI index Liverpool had from the 2016 season until the 2021 season.
+
+```{r}
+avg_spi_liverpool <- spi_premierleague %>%
+  filter(team1 == 'Liverpool' | team2 == 'Liverpool')%>%
+  group_by(season)%>%
+  summarize(average_spi = mean(c(spi1,spi2)))%>%
+  ggplot(mapping = aes(x = season)) +
+  geom_line(mapping =aes(y = average_spi, color = "Average SPI")) +
+  geom_point(mapping =aes(y = average_spi, color = "Average SPI"), size=3) +
+  guides(fill = guide_legend(title = "Metric", reverse = TRUE))+
+  labs(x = "Season", y = "SPI Value", title = "Average SPI of Liverpool over the Seasons", subtitle = "Trends in Liverpool's SPI over the seasons",caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight") +
+  guides(color = guide_legend(title = "Metric", reverse = TRUE))+ 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) 
+
+avg_spi_liverpool
+```
+
+From this plot, we can see that Liverpool's SPI had a huge increase: they had an SPI of around 74 in 2016 and 2017, but they were able to increase it in 2018, with a value of over 80. This value has been maintained also in 2019, 2020 and 2021.
+
+#### What happened in 2018?
+
+We start analysing the trend of Liverpool in the 2018 season.
+
+```{r}
+liverpool_points_2018_density <- spi_premierleague %>%
+  filter(season == 2018, (team1 == "Liverpool" | team2 == "Liverpool")) %>%
+  group_by(match_week) %>%
+  summarize(points = sum(liverpool_points)) %>%
+  ggplot(aes(x = points)) + 
+  geom_density(color = "black", fill ="#00B2A9" ) +
+  scale_x_continuous(breaks = c(0, 1, 3), limits = c(0, 3), name = "Points") + 
+  labs(title = "Density Plot of Points Made by Liverpool in the 2018 Season",
+       x = "Points", y = "Density", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight")+
+  theme_classic() +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    axis.text = element_text(color = "#C8102E", size = 12, family = "sans"),
+    plot.title =  element_text(color = "#C8102E", size = 14, family = "sans", face = "bold"),
+    axis.title =  element_text(color = "#C8102E", size = 14, family = "sans", face = "bold"),
+    legend.key.height = unit(1, "cm"),
+    legend.key.width = unit(1, "cm"),
+    legend.title = element_text(size = 14, family = "sans", face = "bold"),
+    legend.text = element_text(size = 12, family = "sans")
+    )
+liverpool_points_2018_density
+```
+
+
+The density shows that there has been an incredible amount of wins. Therefore, it is in the interest in our interest to analyse the Liverpool's performances more into details.
+
+```{r}
+liverpool_distribution_home <- spi_premierleague %>%
+   filter(season==2018, team1 =='Liverpool') %>%
+  mutate(points_home = factor(points_home, levels = c("3", "1", "0"))) %>%
+  ggplot(position = "dodge")+
+  geom_col(mapping = aes(x = date, y = spi1, fill = points_home))+
+  scale_x_date(date_breaks = "4 week", date_labels = "%b %d", name = "Date") +
+  scale_fill_manual(values=c("#152D1A","#30937F","#4ADDE0") )+
+  labs(title = "Liverpool Home Performances in 2018", subtitle = "Points gained and SPI trend of Liverpool as the home team in the 2018 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Date", y = "Liverpool SPI") + 
+  coord_cartesian(ylim = c(80,100)) +
+  scale_y_continuous(breaks = seq(80, 100, 10)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        plot.subtitle = element_text(size = 12, family = "sans"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold")) +
+  guides(fill = guide_legend(title = "Points"))
+  
+liverpool_distribution_away <- spi_premierleague %>%
+   filter(season==2018, team2 =='Liverpool') %>%
+  mutate(points_away = factor(points_away, levels = c("3", "1", "0"))) %>%
+  ggplot(position = "dodge")+
+  geom_col(mapping = aes(x = date, y = spi2, fill = points_away))+
+  scale_x_date(date_breaks = "4 week", date_labels = "%b %d", name = "Date") +
+  scale_fill_manual(values=c("#152D1A","#30937F","#4ADDE0") )+
+  labs(title = "Liverpool Home Performances in 2018", subtitle = "Points gained and SPI trend of Liverpool as the away team in the 2018 season", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Date", y = "Liverpool SPI") + 
+  coord_cartesian(ylim = c(80,100)) +
+  scale_y_continuous(breaks = seq(80, 100, 10)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        plot.subtitle = element_text(size = 12, family = "sans"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold")) +
+  guides(fill = guide_legend(title = "Points"))
+
+grid.arrange(liverpool_distribution_home, liverpool_distribution_away, nrow = 2)
+
+```
+
+The Liverpool's performances while playing in its stadium were almost perfect, where they finished the season unbeaten, as they failed to win a match only twice.
+
+On the other hand, Liverpool did lost a match while playing as the away team and collected also 5 draws. 
+
+Let's analyse the SPI of the Liverpool's opponent.
+
+```{r}
+points_lv_ho = spi_premierleague %>%
+  filter(season==2018, team1 =='Liverpool') %>%
+  mutate(liverpool_points = factor(liverpool_points , levels = c("0", "1", "3"))) %>%
+ggplot(aes(x = factor(liverpool_points), y = spi2, fill=liverpool_points)) +
+  scale_fill_manual(values=c("#30937F", "#152D1A"))+
+  geom_boxplot() +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) +
+  guides(fill = guide_legend(reverse = TRUE, title = "Points"))+
+ labs(title ="Liverpool Performances (Home team)  2018 season", subtitle = "Liverpool's match outcome compared to Opposition SPI" ,caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x="Liverpool's match outcome",y="Opposition SPI")
+
+points_lv_ho
+```
+
+Here, we can see that Liverpool failed to win against team with a very high SPI.
+
+```{r}
+points_lv_aw = spi_premierleague %>%
+  filter(season==2018, team2 =='Liverpool') %>%
+  mutate(liverpool_points = factor(liverpool_points , levels = c("0", "1", "3"))) %>%
+  ggplot(aes(x = factor(liverpool_points), y = spi1, fill=liverpool_points)) +
+  scale_fill_manual(values=c("#4ADDE0","#30937F","#152D1A"))+
+  geom_boxplot() +
+  scale_x_discrete(labels = c("0" = "Loss", "1" = "Draw", "3" = "Win")) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans"),
+        ) +
+  guides(fill = guide_legend(reverse = TRUE, title = "Points"))+
+  labs(title ="Liverpool Performances (Away team)  2018 season", subtitle = "Liverpool's match outcome compared to Opposition SPI" ,caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x="Liverpool's match outcome",y="Opposition SPI")
+
+points_lv_aw
+```
+
+Again we see that Liverpool struggled the most against teams with an higher SPI.
+
+Was Liverpool the team with the highest SPI? We compare the SPI of the two teams and the match outcome, pointing out the final result.
+
+```{r}
+points_lv_h = spi_premierleague %>%
+  filter(season==2018, team1 =='Liverpool') %>%
+  mutate(liverpool_points = factor(liverpool_points , levels = c("3", "1", "0"))) %>%
+  ggplot(aes(x = spi1, y = spi2, color = liverpool_points)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values=c("#152D1A","#30937F"))+
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans")
+        ) +
+  guides(color = guide_legend(title = "Points")) +
+  labs(title = "Liverpool Performances (Home team) 2018 season ", subtitle = "Liverpool's match outcome and SPI comparison ", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Liverpool SPI",y="Opposition SPI")
+
+
+points_lv_h
+```
+
+Overall, while playing as the home team, Liverpool had an SPI higher than its opponents, except in one match where Liverpool and its opponent' SPI was almost equal, thus indicating a balance matchup.
+
+
+```{r}
+points_lv_a = spi_premierleague %>%
+  filter(season==2018, team2 =='Liverpool') %>%
+  mutate(liverpool_points = factor(liverpool_points , levels = c("3", "1", "0"))) %>%
+  ggplot(aes(x = spi2, y = spi1, color = liverpool_points)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values=c("#152D1A","#30937F","#4ADDE0"))+
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, family = "sans", face = "bold"),
+        axis.text = element_text(size = 12, family = "sans"),
+        axis.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(1, "cm"),
+        legend.title = element_text(size = 14, family = "sans", face = "bold"),
+        legend.text = element_text(size = 12, family = "sans")
+        ) +
+  guides(color = guide_legend(title = "Points")) +
+  labs(title = "Liverpool Performances (Away team) 2018 season", subtitle = "Liverpool's match outcome and SPI comparison ", caption = "Source: Soccer Power Index (SPI) ratings from FiveThirtyEight", x = "Liverpool SPI",y = "Opposition SPI")
+
+
+points_lv_a
+```
+
+Even though, Liverpool had the highest SPI, they struggled a lot while playing as the away team. In particular, they had two draws against teams that had SPI of 66 and 71 compared to Liverpool's 91.8 and 92.7.
+
+To conclude Liverpool's 2018 analysis, we saw that they had the so called "home advantage" that helped them to stay undefeated while playing at home. They struggled more as the away team, but they still manage to obtain a fair amount of points.
+
+Based on the league table Liverpool ended the Premier League in the second place because of a 1 point difference. The matches that costed the championship to Liverpool where mainly the draws against team with an SPI lower than 73. However, those matches were played with Liverpool as the away team, thus indicating that the "home advantage" played an important role, even though it was not portrayed by the SPI.
+
+## Conclusions
+
+In this project we have explored some information about the SPI and the outcomes of football matches played in different years and countries by different teams. Overall, we found out that the dataset contains a lot of information about the validity of SPI and its ability to predict the winner's team. Even if the SPI cannot fully predict the outcome of a match, we were able to see how it can be considered a good estimation.

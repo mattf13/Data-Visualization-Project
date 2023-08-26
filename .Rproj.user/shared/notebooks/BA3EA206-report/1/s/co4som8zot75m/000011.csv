@@ -1,0 +1,3 @@
+"0","columns_to_remove = c(""prob1"",""prob2"",""probtie"",""proj_score1"", ""proj_score2"", ""importance1"", ""importance2"", ""adj_score1"",""adj_score2"",""xg1"",""xg2"",""nsxg1"",""nsxg2"")"
+"0","spi_matches_cleaned <- subset(spi_matches_without_na, select = !(names(spi_matches_without_na) %in% columns_to_remove))"
+"0","spi_matches_cleaned"
