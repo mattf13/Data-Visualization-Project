@@ -1,4 +1,4 @@
-# Data Visualization Project# Data Visualization Project - Visualizing the Correlation between SPI and Football Match Results
+ Data Visualization Project - Visualizing the Correlation between SPI and Football Match Results
 
 ## Author: Matteo Fiore
 
